@@ -19,8 +19,15 @@ namespace WorldExploration.Map.EditorTools
         private const string MatDir = "Assets/Game/Map/Materials";
         private const string MapObjectName = "WorldMap";
 
-        private static readonly Color LandColor = new Color(0.36f, 0.55f, 0.27f); // 녹색
-        private static readonly Color SeaColor = new Color(0.13f, 0.30f, 0.52f);  // 파랑
+        private static readonly Color SeaColor = new Color(0.13f, 0.34f, 0.58f);  // 밝은 파랑
+        // 저폴리 고도 바이옴 색 (LandMesh 서브메시 0~3 순서와 일치)
+        private static readonly (string file, Color col)[] BiomeMats =
+        {
+            ("Biome_Lowland.mat",  new Color(0.36f, 0.60f, 0.31f)), // 0 저지대 초록
+            ("Biome_Highland.mat", new Color(0.47f, 0.39f, 0.27f)), // 1 고지대 갈색
+            ("Biome_Peak.mat",     new Color(0.94f, 0.96f, 0.98f)), // 2 봉우리·극지 흰색
+            ("Biome_Cliff.mat",    new Color(0.40f, 0.33f, 0.24f)), // 3 절벽 진갈색
+        };
 
         [MenuItem("Tools/World Exploration/Build Map In Scene")]
         public static void Build()
@@ -57,7 +64,15 @@ namespace WorldExploration.Map.EditorTools
                 var land = new GameObject("Land");
                 land.transform.SetParent(root.transform, false);
                 land.AddComponent<MeshFilter>().sharedMesh = landMesh;
-                land.AddComponent<MeshRenderer>().sharedMaterial = EnsureMaterial("Land.mat", LandColor, doubleSided: true);
+                // 서브메시(바이옴) 수만큼 머티리얼 배정
+                int n = landMesh.subMeshCount;
+                var mats = new Material[n];
+                for (int s = 0; s < n; s++)
+                {
+                    var (file, col) = s < BiomeMats.Length ? BiomeMats[s] : BiomeMats[BiomeMats.Length - 1];
+                    mats[s] = EnsureMaterial(file, col, doubleSided: true);
+                }
+                land.AddComponent<MeshRenderer>().sharedMaterials = mats;
                 land.transform.localPosition = Vector3.zero; // 메시가 이미 월드 좌표
             }
             else
@@ -76,6 +91,7 @@ namespace WorldExploration.Map.EditorTools
             }
             var rig = GetOrAdd<MapCameraRig>(cam.gameObject);
             rig.Map = data;
+            rig.ViewHeight = 400f; // 시작 줌(넓게). 인스펙터 View Height로 조절
             cam.clearFlags = CameraClearFlags.SolidColor; // 바다 평면이 안 보여도 배경은 바다색
             cam.backgroundColor = SeaColor;
 
@@ -94,6 +110,10 @@ namespace WorldExploration.Map.EditorTools
             }
             sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             sun.shadows = LightShadows.None;
+            sun.intensity = 0.85f;                  // 약하게 → 면별 밝기 편차 완화(색 조화)
+            // 균일한 앰비언트로 그늘진 면도 밝게 → 저폴리 색이 차분·조화
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.62f, 0.63f, 0.66f);
 
             Selection.activeGameObject = root;
             EditorSceneManager.MarkSceneDirty(root.scene);

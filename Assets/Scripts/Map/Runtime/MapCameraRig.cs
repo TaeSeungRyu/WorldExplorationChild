@@ -45,6 +45,15 @@ namespace WorldExploration.Map
 
         public WorldMapData Map { get => map; set { map = value; ResetToFocus(); } }
         public Transform FollowTarget { get => followTarget; set => followTarget = value; }
+        public float ViewHeight
+        {
+            get => viewHeight;
+            set
+            {
+                viewHeight = _targetViewHeight = Mathf.Clamp(value, minViewHeight, maxViewHeight);
+                if (_initialized) ApplyImmediate();
+            }
+        }
 
         private void OnEnable() => ResetToFocus();
         private void OnValidate() { _targetViewHeight = viewHeight; if (_initialized) ApplyImmediate(); else ResetToFocus(); }

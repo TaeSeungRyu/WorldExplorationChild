@@ -8,9 +8,9 @@ namespace WorldExploration.Map.EditorTools
     /// 돌출 대륙 메시 바이너리(tools/build_land_mesh.py) → Unity Mesh 에셋.
     /// 메뉴: Tools ▸ World Exploration ▸ Import Land Mesh (bytes → Mesh)
     ///
-    /// 포맷(LE): int32 vCount, int32 triCount,
-    /// vCount*(float32 x,y,z), triCount*3 int32.
-    /// 정점 y는 고도(산). 단색 머티리얼이라 UV 없음. 법선은 임포트 시 계산.
+    /// 포맷(LE): int32 vCount, int32 subCount, subCount*int32 triCount,
+    /// vCount*(float32 x,y,z), 그다음 서브메시별 triCount*3 int32(순차).
+    /// 서브메시 = 위도 기후대 바이옴(열대/아열대/온대/냉대/극지) + 절벽. UV 없음(단색). 법선 자동.
     /// </summary>
     public static class LandMeshImporter
     {
@@ -29,11 +29,13 @@ namespace WorldExploration.Map.EditorTools
             }
 
             Vector3[] verts;
-            int[] tris;
+            int[][] subTris;
             using (var br = new BinaryReader(File.OpenRead(abs)))
             {
                 int vCount = br.ReadInt32();
-                int triCount = br.ReadInt32();
+                int subCount = br.ReadInt32();
+                var triCounts = new int[subCount];
+                for (int s = 0; s < subCount; s++) triCounts[s] = br.ReadInt32();
                 verts = new Vector3[vCount];
                 for (int i = 0; i < vCount; i++)
                 {
@@ -42,8 +44,12 @@ namespace WorldExploration.Map.EditorTools
                     float z = br.ReadSingle();
                     verts[i] = new Vector3(x, y, z);
                 }
-                tris = new int[triCount * 3];
-                for (int i = 0; i < tris.Length; i++) tris[i] = br.ReadInt32();
+                subTris = new int[subCount][];
+                for (int s = 0; s < subCount; s++)
+                {
+                    subTris[s] = new int[triCounts[s] * 3];
+                    for (int i = 0; i < subTris[s].Length; i++) subTris[s][i] = br.ReadInt32();
+                }
             }
 
             var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(OutputAsset);
@@ -53,7 +59,8 @@ namespace WorldExploration.Map.EditorTools
             mesh.Clear();
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.vertices = verts;
-            mesh.triangles = tris;
+            mesh.subMeshCount = subTris.Length;
+            for (int s = 0; s < subTris.Length; s++) mesh.SetTriangles(subTris[s], s);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
@@ -64,8 +71,9 @@ namespace WorldExploration.Map.EditorTools
 
             Selection.activeObject = mesh;
             EditorGUIUtility.PingObject(mesh);
+            int total = 0; foreach (var s in subTris) total += s.Length / 3;
             Debug.Log($"[LandMeshImporter] {(isNew ? "생성" : "갱신")} 완료: {OutputAsset}\n" +
-                      $"정점 {verts.Length}, 삼각형 {tris.Length / 3}");
+                      $"정점 {verts.Length}, 서브메시 {subTris.Length}, 삼각형 {total}");
         }
     }
 }
