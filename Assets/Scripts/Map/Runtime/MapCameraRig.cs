@@ -53,7 +53,7 @@ namespace WorldExploration.Map
         {
             boundsCenter = area.center;
             boundsSize = area.size;
-            tiltAngle = 55f;        // 엉킨 값 리셋(비스듬 부감)
+            tiltAngle = 33f;        // 부감 각도(요청값)
             yawAngle = 0f;
             fieldOfView = 45f;
             minViewHeight = Mathf.Max(2f, maxView * 0.01f);
