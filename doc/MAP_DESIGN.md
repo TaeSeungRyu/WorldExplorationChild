@@ -120,17 +120,29 @@ class WorldMapData : ScriptableObject
 워크스페이스를 깔끔하게 유지하기 위한 경계. **맵 관련 모든 코드는 `Assets/Scripts/Map/` 아래로.**
 
 ```
-Assets/Scripts/Map/
-├─ MAP_DESIGN.md          ← (현재 문서)
-├─ Data/                  ← 순수 데이터 타입 (런타임 의존 최소)
-│  ├─ TerrainType.cs
-│  ├─ MoveMode.cs
-│  ├─ GridCoord.cs
-│  └─ WorldMapData.cs     ← ScriptableObject (맵의 진실)
-├─ Runtime/               ← 런타임 서비스 (후속)
-│  └─ (이동/길찾기/조회 헬퍼 — 다음 단계)
-└─ Editor/                ← 에디터 전용 (후속)
-   └─ WorldMapImporter.cs ← PNG → WorldMapData (다음 단계)
+doc/                              ← 모든 문서 (Assets 밖)
+├─ MAP_DESIGN.md                  ← (현재 문서)
+└─ DATA_SOURCES.md
+
+source/                           ← 원본 지리 데이터 (Assets 밖, 빌드 비포함)
+└─ ne_110m_*.geojson
+
+tools/                            ← 데이터 변환 스크립트 (Assets 밖)
+└─ geojson_to_terrain.py          ← GeoJSON → 512x256 PNG
+
+Assets/Scripts/Map/               ← 코드
+├─ Data/                          ← 순수 데이터 타입
+│  ├─ TerrainType.cs   [완료]
+│  ├─ MoveMode.cs      [완료]
+│  ├─ GridCoord.cs     [완료]
+│  └─ WorldMapData.cs  [완료]  ← ScriptableObject (맵의 진실)
+├─ Runtime/                       ← 런타임 서비스 (후속: 이동/길찾기/렌더)
+└─ Editor/
+   └─ WorldMapImporter.cs [완료]  ← PNG → WorldMapData.asset
+
+Assets/Game/Map/                  ← 데이터 에셋
+├─ Authoring/world_terrain_512x256.png  ← 변환된 칸 이미지 (임포터 입력)
+└─ WorldMapData.asset             ← 임포터 실행 시 생성 (게임이 읽는 최종 데이터)
 ```
 
 > assembly definition(`.asmdef`)으로 `Map` / `Map.Editor`를 분리하면 컴파일 격리·테스트가 깔끔하다. (선택, 후속 판단)
