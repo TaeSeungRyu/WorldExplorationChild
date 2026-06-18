@@ -11,16 +11,23 @@
 
 | 파일 | 내용 | 용도 |
 |------|------|------|
-| `source/ne_110m_land.geojson` | 육지 영역 폴리곤 | 바다/육지 마스크 (terrain 기본) |
-| `source/ne_110m_admin_0_countries.geojson` | 국가 경계 177개 | nationOwner 레이어 (후속) |
+| `source/ne_50m_land.geojson` | 정밀 육지 폴리곤 1420개 (1:50m) | **현재** 바다/육지 마스크 (해안선) |
+| `source/gebco_elev_21600x10800.png` | 통합 고도 그레이스케일 (육지 고도, 바다=0) | **현재** 고도(height) 레이어 |
+| `source/ne_110m_admin_0_countries.geojson` | 국가 경계 177개 (1:110m) | nationOwner 레이어 (후속) |
 | `source/ne_110m_populated_places.geojson` | 주요 도시 243개 (이름·위경도) | CityData 배치 (후속) |
+| `source/ne_110m_land.geojson` | 저정밀 육지 (1:110m) | 초기 프로토타입(현재 미사용) |
 
 ## 출처 및 라이선스
-- **제공처**: Natural Earth (naturalearthdata.com), 미러: github.com/nvkelso/natural-earth-vector
-- **스케일**: 1:110m (저해상, 첫 작업용)
-- **좌표계**: CRS84 (경도/위도) — 정사각투영(equirectangular) 변환에 적합
-- **라이선스**: **퍼블릭 도메인** — 상업적 이용 포함 자유 (출처 표기 권장, 의무 아님)
+- **Natural Earth** (naturalearthdata.com, 미러 github.com/nvkelso/natural-earth-vector)
+  - 좌표계 CRS84(경위도), 라이선스 **퍼블릭 도메인** — 상업 이용 자유(출처 표기 권장).
+- **GEBCO 통합 고도 PNG** — NASA Visible Earth(eoimages.gsfc.nasa.gov) 제공 GEBCO 기반 그레이스케일.
+  - 21600×10800, 8-bit. **육지 고도만** 담고 바다는 0(평평). 항해 게임엔 육지 기복만 필요하므로 적합.
+  - GEBCO/NASA 데이터, 공개 이용 가능(GEBCO 출처 표기 권장).
 
 ## 변환 방식 (요약)
-경도(-180~180)→x, 위도(-90~90)→y 선형 매핑 → 512×256 격자로 래스터화 → 셀별 바다/육지 판정.
+경도(-180~180)→x, 위도(-90~90)→y 선형 매핑 → **1024×512** 격자로 래스터화.
+`tools/build_world_data.py`가 두 장의 PNG를 생성한다:
+- `world_terrain_1024x512.png` — 지형 분류색(심해/얕은바다/육지/산악)
+- `world_height_1024x512.png` — 고도 그레이스케일(**128=해수면**, >128 육지높이)
+
 상세는 [MAP_DESIGN.md](MAP_DESIGN.md) 참조.

@@ -20,8 +20,9 @@ namespace WorldExploration.Map
         [Tooltip("격자 (0,0) 셀의 월드 기준 위치")]
         [SerializeField] private Vector3 origin = Vector3.zero;
 
-        // 셀당 1바이트(TerrainType). index = y * width + x. 인스펙터에서 숨김(대용량).
-        [SerializeField, HideInInspector] private byte[] terrain;
+        // 셀당 1바이트. index = y * width + x. 인스펙터에서 숨김(대용량).
+        [SerializeField, HideInInspector] private byte[] terrain;          // TerrainType
+        [SerializeField, HideInInspector] private byte[] heights;          // 고도: 128=해수면, >128 육지높이, <128 해저(현재 미사용)
 
         public int Width => width;
         public int Height => height;
@@ -29,28 +30,57 @@ namespace WorldExploration.Map
         public Vector3 Origin => origin;
         public int CellCount => width * height;
 
+        /// <summary>해수면 기준 고도 바이트값(128=해수면).</summary>
+        public const byte SeaLevel = 128;
+
         /// <summary>임포터/생성기에서 격자 데이터를 채울 때 호출.</summary>
-        public void Initialize(int width, int height, byte[] terrain, float cellSize, Vector3 origin)
+        public void Initialize(int width, int height, byte[] terrain, byte[] heights, float cellSize, Vector3 origin)
         {
-            if (terrain == null || terrain.Length != width * height)
+            int expected = width * height;
+            if (terrain == null || terrain.Length != expected)
                 throw new System.ArgumentException(
-                    $"terrain 길이({terrain?.Length ?? 0})가 width*height({width * height})와 다릅니다.");
+                    $"terrain 길이({terrain?.Length ?? 0})가 width*height({expected})와 다릅니다.");
+            if (heights == null || heights.Length != expected)
+                throw new System.ArgumentException(
+                    $"heights 길이({heights?.Length ?? 0})가 width*height({expected})와 다릅니다.");
 
             this.width = width;
             this.height = height;
             this.terrain = terrain;
+            this.heights = heights;
             this.cellSize = cellSize;
             this.origin = origin;
         }
+
+        /// <summary>데이터(terrain/heights)가 width*height와 일치해 사용 가능한지.</summary>
+        public bool IsReady =>
+            width > 0 && height > 0 &&
+            terrain != null && terrain.Length == width * height &&
+            heights != null && heights.Length == width * height;
+
+        /// <summary>셀의 고도 바이트값(128=해수면). 범위 밖/미초기화는 해수면 반환.</summary>
+        public byte GetHeight(int x, int y)
+        {
+            if (!InBounds(x, y)) return SeaLevel;
+            int idx = y * width + x;
+            if (heights == null || idx >= heights.Length) return SeaLevel;
+            return heights[idx];
+        }
+
+        public byte GetHeight(GridCoord c) => GetHeight(c.x, c.y);
+
+        /// <summary>해수면 기준 고도(-1..+1 정규화, 해수면=0, 최고육지=+1).</summary>
+        public float GetHeightSigned01(int x, int y) => (GetHeight(x, y) - SeaLevel) / 127f;
 
         public bool InBounds(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
         public bool InBounds(GridCoord c) => InBounds(c.x, c.y);
 
         public TerrainType GetTerrain(int x, int y)
         {
-            if (!InBounds(x, y))
-                throw new System.IndexOutOfRangeException($"격자 범위를 벗어남: ({x}, {y})");
-            return (TerrainType)terrain[y * width + x];
+            if (!InBounds(x, y)) return TerrainType.DeepSea;
+            int idx = y * width + x;
+            if (terrain == null || idx >= terrain.Length) return TerrainType.DeepSea;
+            return (TerrainType)terrain[idx];
         }
 
         public TerrainType GetTerrain(GridCoord c) => GetTerrain(c.x, c.y);

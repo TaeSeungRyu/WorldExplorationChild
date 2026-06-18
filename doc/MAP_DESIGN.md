@@ -63,22 +63,23 @@ enum MoveMode { Ship, Land }
 
 ## 4. 셀 저장 구조 (Cell Storage)
 
-대형 월드(예: 512×256 = 131,072셀)도 가볍게 다루기 위해 **1D 평면 배열 + 레이어 분리**를 쓴다.
+대형 월드(현재 **1024×512 = 524,288셀**)도 가볍게 다루기 위해 **1D 평면 배열 + 레이어 분리**를 쓴다.
 
 ```
 class WorldMapData : ScriptableObject
 {
-    int width;
-    int height;
-    float cellSize;     // 월드 유닛/셀
+    int width;          // 1024
+    int height;         // 512
+    float cellSize;     // 월드 유닛/셀 (현재 1)
     Vector3 origin;     // 격자 [0,0]의 월드 위치
 
     byte[] terrain;     // length = width*height, index = y*width + x  (TerrainType)
+    byte[] heights;     // 고도: 128=해수면, >128 육지높이 (3D 기복용)
     // (확장) byte[] nationOwner;  // 셀별 소속 국가 id, 0=무소속
 }
 ```
 
-- 인덱싱: `index = y * width + x`. 셀당 1바이트 → 13만 셀도 ~128KB.
+- 인덱싱: `index = y * width + x`. 셀당 1바이트 × 2레이어 → 52만 셀도 ~1MB.
 - "셀별 추가 정보(국가 소속 등)"는 **별도 평행 배열**로 둔다. terrain 배열에 비트를 섞지 않는다(가독성·확장성).
 - 도시/발견물/NPC 같은 **희소(sparse) 데이터는 배열이 아니라 별도 리스트/SO**로 (5번 참조).
 
@@ -125,10 +126,12 @@ doc/                              ← 모든 문서 (Assets 밖)
 └─ DATA_SOURCES.md
 
 source/                           ← 원본 지리 데이터 (Assets 밖, 빌드 비포함)
-└─ ne_110m_*.geojson
+├─ ne_50m_land.geojson            ← 해안선(현재)
+├─ gebco_elev_21600x10800.png     ← 고도 원본(현재)
+└─ ne_110m_*.geojson              ← 국가/도시(후속)
 
 tools/                            ← 데이터 변환 스크립트 (Assets 밖)
-└─ geojson_to_terrain.py          ← GeoJSON → 512x256 PNG
+└─ build_world_data.py            ← GeoJSON+고도 → 1024x512 PNG 2장(지형/고도)
 
 Assets/Scripts/Map/               ← 코드
 ├─ Data/                          ← 순수 데이터 타입
@@ -141,7 +144,8 @@ Assets/Scripts/Map/               ← 코드
    └─ WorldMapImporter.cs [완료]  ← PNG → WorldMapData.asset
 
 Assets/Game/Map/                  ← 데이터 에셋
-├─ Authoring/world_terrain_512x256.png  ← 변환된 칸 이미지 (임포터 입력)
+├─ Authoring/world_terrain_1024x512.png ← 지형 분류색 (임포터 입력)
+├─ Authoring/world_height_1024x512.png  ← 고도 그레이스케일 (임포터 입력)
 └─ WorldMapData.asset             ← 임포터 실행 시 생성 (게임이 읽는 최종 데이터)
 ```
 
@@ -149,17 +153,21 @@ Assets/Game/Map/                  ← 데이터 에셋
 
 ---
 
-## 8. 후속 작업 순서 (참고 — 이번엔 진행 안 함)
+## 8. 진행 상황 & 다음
 
-1. **(다음)** 위 `Data/` 4개 타입 C# 구현 + 작은 테스트 맵 SO 1개 생성
-2. 격자↔3D 비주얼 연결 (탑다운 카메라 + 지형 표시)
-3. 배 오브젝트 이동 + `IsNavigable` 통행 판정 (= 첫 "동작하는 맵" MVP)
-4. 항구/도시 진입, A* 자동 항해
-5. 이후 의뢰·무역·전투·명성·동료 시스템 (각각 맵을 *참조*)
+완료:
+1. ✅ `Data/` 타입(TerrainType/MoveMode/GridCoord/WorldMapData) + 고도(heights) 레이어
+2. ✅ 실제 지구 데이터(해안선 1:50m + GEBCO 고도) → 1024×512 PNG 변환 + 임포터
+3. ✅ 격자 → 고도 반영 3D 지형 메시 + 탑다운 직교 카메라 + 비스듬한 광원(기복 음영)
 
----
+다음 후보:
+4. 동서 좌우 연결(지구 한 바퀴), 극지 크롭(선택)
+5. 배 오브젝트 이동 + `IsNavigable` 통행 판정 (= 첫 "동작하는 맵" MVP)
+6. 항구/도시 진입, A* 자동 항해
+7. 이후 의뢰·무역·전투·명성·동료 시스템 (각각 맵을 *참조*)
 
-### 확인 필요 (구현 착수 전)
-- 지형 타입 5종 구성에 동의하는지 (MVP는 3종으로 축소 가능)
-- `cellSize` 기본값과 첫 테스트 맵 크기 (예: 64×64로 시작 권장)
-- 좌표 매핑을 XZ 평면(권장)으로 확정하는지
+### 확정된 결정
+- 지형 타입: DeepSea/ShallowSea/Land/Mountain (Port는 도시 단계에서)
+- 격자 1024×512, cellSize 1, XZ 평면 매핑(x→X, y→Z), (0,0)=남서
+- 고도: 128=해수면 기준 byte, 렌더러에서 heightScale로 과장
+- 모바일: 정적 메시 + 메시 다운샘플 + 30fps 고정 + 그림자 off
