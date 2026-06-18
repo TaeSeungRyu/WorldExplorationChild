@@ -15,7 +15,7 @@ build_world_data.py
 """
 import json
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -23,16 +23,18 @@ ROOT = Path(__file__).resolve().parent.parent
 LAND_SRC = ROOT / "source" / "ne_50m_land.geojson"
 ELEV_SRC = ROOT / "source" / "gebco_elev_21600x10800.png"
 OUT_DIR = ROOT / "Assets" / "Game" / "Map" / "Authoring"
-OUT_TERRAIN = OUT_DIR / "world_terrain_1024x512.png"
-OUT_HEIGHT = OUT_DIR / "world_height_1024x512.png"
+W, H = 4096, 2048
+OUT_TERRAIN = OUT_DIR / f"world_terrain_{W}x{H}.png"
+OUT_HEIGHT = OUT_DIR / f"world_height_{W}x{H}.png"
 
-W, H = 1024, 512
+ICE_LAT = -60.0  # 이 위도 이하의 육지는 빙하(남극)로 분류
 
 # 지형 분류 색 (WorldMapImporter의 팔레트와 일치시킬 것)
 C_DEEP = (30, 70, 140)
 C_SHALLOW = (70, 130, 200)
 C_LAND = (95, 150, 70)
 C_MOUNTAIN = (120, 110, 95)
+C_ICE = (235, 240, 245)
 
 
 def lonlat_to_px(lon, lat):
@@ -52,7 +54,7 @@ def rings(geom):
 
 
 def build_land_mask():
-    """1=육지, 0=바다 의 1차원 리스트 (index = y*W + x)."""
+    """육지 마스크 PIL 이미지(L, 255=육지)와 1/0 리스트(index = y*W + x)를 함께 반환."""
     data = json.loads(LAND_SRC.read_text(encoding="utf-8"))
     img = Image.new("L", (W, H), 0)
     d = ImageDraw.Draw(img)
@@ -62,7 +64,8 @@ def build_land_mask():
             for hole in holes:
                 d.polygon(hole, fill=0)
     px = img.load()
-    return [1 if px[i % W, i // W] else 0 for i in range(W * H)]
+    land = [1 if px[i % W, i // W] else 0 for i in range(W * H)]
+    return land, img
 
 
 def load_elevation():
@@ -78,28 +81,15 @@ def pct(sorted_vals, p):
     return sorted_vals[min(len(sorted_vals) - 1, int(p / 100.0 * (len(sorted_vals) - 1)))]
 
 
-def build_shallow(land, radius=2):
-    """바다 셀 중 육지에서 radius칸 이내인 것 = 얕은바다(대륙붕). index 리스트."""
-    shallow = bytearray(W * H)
-    for i in range(W * H):
-        if not land[i]:
-            continue
-        x0, y0 = i % W, i // W
-        for dy in range(-radius, radius + 1):
-            yy = y0 + dy
-            if yy < 0 or yy >= H:
-                continue
-            for dx in range(-radius, radius + 1):
-                xx = x0 + dx
-                if 0 <= xx < W:
-                    j = yy * W + xx
-                    if not land[j]:
-                        shallow[j] = 1
-    return shallow
+def build_shallow_mask(land_img, radius):
+    """육지를 radius만큼 팽창(MaxFilter) → 그 영역의 바다 셀 = 얕은바다. dpx loader 반환."""
+    size = radius * 2 + 1
+    dil = land_img.filter(ImageFilter.MaxFilter(size))
+    return dil.load()
 
 
 def main():
-    land = build_land_mask()
+    land, land_img = build_land_mask()
     elev = load_elevation()  # 육지 고도만(바다=0)
     n = W * H
 
@@ -107,14 +97,17 @@ def main():
     land_e = sorted(elev[i] for i in range(n) if land[i])
     land_hi = max(1, pct(land_e, 98))      # 최고 고도(이상치 제외)
     mtn_thr = pct(land_e, 82)              # 상위 ~18%를 산악으로
-    shallow = build_shallow(land, radius=2)
+
+    # 해상도에 비례한 대륙붕 폭(얕은바다)
+    shallow_radius = max(2, W // 1024)
+    dpx = build_shallow_mask(land_img, shallow_radius)
 
     terrain_img = Image.new("RGB", (W, H))
     height_img = Image.new("L", (W, H))
     tpx = terrain_img.load()
     hpx = height_img.load()
 
-    counts = {"deep": 0, "shallow": 0, "land": 0, "mountain": 0}
+    counts = {"deep": 0, "shallow": 0, "land": 0, "mountain": 0, "ice": 0}
     for i in range(n):
         x, y = i % W, i // W
         e = elev[i]
@@ -122,14 +115,17 @@ def main():
             # 해수면(128) ~ 최고 고도(255)
             t = max(0.0, min(1.0, e / land_hi))
             hpx[x, y] = 128 + int(t * 127)
-            if e >= mtn_thr:
+            lat = 90.0 - (y + 0.5) / H * 180.0
+            if lat <= ICE_LAT:
+                tpx[x, y] = C_ICE; counts["ice"] += 1
+            elif e >= mtn_thr:
                 tpx[x, y] = C_MOUNTAIN; counts["mountain"] += 1
             else:
                 tpx[x, y] = C_LAND; counts["land"] += 1
         else:
             # 바다는 평평(해수면=128). 깊이 데이터는 없음.
             hpx[x, y] = 128
-            if shallow[i]:
+            if dpx[x, y]:  # 팽창된 육지에 닿음 = 대륙붕(얕은바다)
                 tpx[x, y] = C_SHALLOW; counts["shallow"] += 1
             else:
                 tpx[x, y] = C_DEEP; counts["deep"] += 1
@@ -144,6 +140,7 @@ def main():
     print(f"shallow sea     : {counts['shallow']}")
     print(f"land            : {counts['land']}")
     print(f"mountain        : {counts['mountain']}")
+    print(f"ice (antarctic) : {counts['ice']}")
     print(f"saved           : {OUT_TERRAIN.relative_to(ROOT)}")
     print(f"saved           : {OUT_HEIGHT.relative_to(ROOT)}")
 

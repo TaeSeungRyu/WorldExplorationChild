@@ -13,8 +13,8 @@ namespace WorldExploration.Map.EditorTools
     /// </summary>
     public static class WorldMapImporter
     {
-        private const string TerrainPng = "Assets/Game/Map/Authoring/world_terrain_1024x512.png";
-        private const string HeightPng = "Assets/Game/Map/Authoring/world_height_1024x512.png";
+        private const string TerrainPng = "Assets/Game/Map/Authoring/world_terrain_4096x2048.png";
+        private const string HeightPng = "Assets/Game/Map/Authoring/world_height_4096x2048.png";
         private const string OutputAsset = "Assets/Game/Map/WorldMapData.asset";
 
         // build_world_data.py 의 지형 분류 색과 일치.
@@ -24,6 +24,7 @@ namespace WorldExploration.Map.EditorTools
             (new Color32(70, 130, 200, 255), TerrainType.ShallowSea),
             (new Color32(95, 150, 70, 255), TerrainType.Land),
             (new Color32(120, 110, 95, 255), TerrainType.Mountain),
+            (new Color32(235, 240, 245, 255), TerrainType.Ice),
         };
 
         [MenuItem("Tools/World Exploration/Import World Map (PNG → WorldMapData)")]
@@ -53,7 +54,7 @@ namespace WorldExploration.Map.EditorTools
 
             var terrain = new byte[w * h];
             var heights = new byte[w * h];
-            var counts = new int[5];
+            var counts = new int[6];
             for (int i = 0; i < terrain.Length; i++)
             {
                 TerrainType t = Classify(terrainPx[i]);
@@ -81,7 +82,7 @@ namespace WorldExploration.Map.EditorTools
             Debug.Log($"[WorldMapImporter] {(isNew ? "생성" : "갱신")} 완료: {OutputAsset}\n" +
                       $"격자 {w}x{h} ({w * h}셀) | 심해 {counts[(int)TerrainType.DeepSea]}, " +
                       $"얕은바다 {counts[(int)TerrainType.ShallowSea]}, 육지 {counts[(int)TerrainType.Land]}, " +
-                      $"산악 {counts[(int)TerrainType.Mountain]}");
+                      $"산악 {counts[(int)TerrainType.Mountain]}, 빙하 {counts[(int)TerrainType.Ice]}");
         }
 
         private static bool TryLoadTexture(string assetPath, out Texture2D tex)

@@ -11,5 +11,6 @@ namespace WorldExploration.Map
         Land = 2,       // 평지 — 도보만
         Mountain = 3,   // 산악 — 통행 불가
         Port = 4,       // 항구 — 배/도보 모두 (육지↔바다 접점)
+        Ice = 5,        // 빙하(남극 등) — 통행 불가, 흰색
     }
 }
