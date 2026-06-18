@@ -15,8 +15,8 @@ namespace WorldExploration.Map
         [SerializeField] private WorldMapData mapData;
 
         [Header("고도")]
-        [Tooltip("최고 육지 고도가 솟는 월드 높이(과장). 0이면 평면.")]
-        [SerializeField] private float heightScale = 30f;
+        [Tooltip("최고 육지 고도가 솟는 월드 높이(과장). 0이면 평면. 입체감을 키우려면 올린다.")]
+        [SerializeField] private float heightScale = 45f;
 
         [Header("성능")]
         [Tooltip("메시 격자 다운샘플(1=풀, 2=절반…). 텍스처 해상도는 그대로. 모바일은 2~4 권장.")]
