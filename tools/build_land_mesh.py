@@ -1,8 +1,9 @@
 """
 build_land_mesh.py
-ne_50m_land.geojson → 완전 평면 대륙 시트(고도·두께 없음).
+ne_50m_land.geojson → 하드엣지 돌출 대륙 메시(고원형).
 
-해안선 ear-clipping 윗면만. 돌출/옆벽 없음 → 모든 법선 +Y → 균일 음영(둥근 느낌 0).
+해안선 ear-clipping 윗면(평면) + 수직 옆벽. 윗면/옆벽 정점을 분리해 모서리를 각지게
+→ 윗면 법선 +Y(균일), 옆벽 법선은 바깥 수평. 둥근 느낌·줄무늬 없이 두께(입체감)만.
 지형 기복(산 등)은 나중에 별도 프리팹/에셋을 맵 위에 배치하는 방식으로 추가한다.
 
 출력: Assets/Game/Map/land_mesh.bytes
@@ -20,7 +21,8 @@ OUT = ROOT / "Assets" / "Game" / "Map" / "land_mesh.bytes"
 
 WORLD_W = 4096.0
 WORLD_H = 2048.0
-TOP_Y = 0.1       # 육지 시트 높이(바다 -0.05 바로 위, 평면)
+TOP_Y =2.0      # 육지 윗면 높이(고원 두께 — 입체감, 고도 아님)
+BOTTOM_Y = -1.0   # 옆벽 바닥(바다 밑으로)
 
 
 def to_world(lon, lat):
@@ -125,11 +127,26 @@ def main():
                 pts = pts[::-1]
                 n = len(pts)
 
+            # 윗면 전용 정점 (법선 +Y 보존 위해 옆벽과 분리)
             top_base = len(verts)
             for (x, z) in pts:
-                verts.append((x, TOP_Y, z))       # 평면 시트
-            for (a, b, c) in ear_clip(pts):       # 법선 +Y: a,c,b
+                verts.append((x, TOP_Y, z))
+            for (a, b, c) in ear_clip(pts):       # 윗면, 법선 +Y: a,c,b
                 tris.extend((top_base + a, top_base + c, top_base + b))
+
+            # 옆벽 전용 정점 (윗면 모서리 복제 + 바닥) → 각진 모서리
+            wt_base = len(verts)
+            for (x, z) in pts:
+                verts.append((x, TOP_Y, z))
+            wb_base = len(verts)
+            for (x, z) in pts:
+                verts.append((x, BOTTOM_Y, z))
+            for i in range(n):                    # CCW 링 → 바깥 법선 (dz,0,-dx)
+                j = (i + 1) % n
+                wti, wtj = wt_base + i, wt_base + j
+                wbi, wbj = wb_base + i, wb_base + j
+                tris.extend((wbi, wti, wtj))
+                tris.extend((wbi, wtj, wbj))
             poly_count += 1
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -143,7 +160,7 @@ def main():
     print(f"polygons   : {poly_count}")
     print(f"vertices   : {len(verts)}")
     print(f"triangles  : {len(tris)//3}")
-    print(f"(flat sheet, no extrude)")
+    print(f"(hard-edge extrude, thickness {TOP_Y - BOTTOM_Y})")
     print(f"file size  : {OUT.stat().st_size/1024:.0f} KB")
     print(f"elapsed    : {time.time()-t0:.1f}s")
     print(f"saved      : {OUT.relative_to(ROOT)}")

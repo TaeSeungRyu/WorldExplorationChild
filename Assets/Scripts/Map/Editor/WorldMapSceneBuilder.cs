@@ -2,6 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace WorldExploration.Map.EditorTools
 {
@@ -77,6 +78,11 @@ namespace WorldExploration.Map.EditorTools
             rig.Map = data;
             cam.clearFlags = CameraClearFlags.SolidColor; // 바다 평면이 안 보여도 배경은 바다색
             cam.backgroundColor = SeaColor;
+
+            // 해안선 가장자리 부드럽게: URP 에셋 MSAA 4x(지오메트리) + 카메라 FXAA(화면 기반) 둘 다.
+            var camData = cam.GetUniversalAdditionalCameraData();
+            camData.renderPostProcessing = true;   // FXAA 적용을 위해 후처리 패스 켬
+            camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
 
             // 5) 직사광 — 돌출 대륙 옆면 음영(입체감)
             Light sun = Object.FindFirstObjectByType<Light>();

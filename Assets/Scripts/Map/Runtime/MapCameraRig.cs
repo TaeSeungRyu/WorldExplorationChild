@@ -25,10 +25,12 @@ namespace WorldExploration.Map
 
         [Header("시점")]
         [Range(20f, 90f)] [SerializeField] private float tiltAngle = 55f;
+        [Tooltip("수평 회전(도). 0=북쪽 위.")]
+        [Range(-90f, 90f)] [SerializeField] private float yawAngle = 0f;
         [Range(20f, 80f)] [SerializeField] private float fieldOfView = 45f;
 
         [Header("줌 (세로로 보이는 월드 크기)")]
-        [SerializeField] private float viewHeight = 60f;
+        [SerializeField] private float viewHeight = 50f;
         [SerializeField] private float minViewHeight = 20f;
         [SerializeField] private float maxViewHeight = 2048f;
         [Range(1.02f, 1.3f)] [SerializeField] private float zoomStep = 1.12f;
@@ -102,10 +104,13 @@ namespace WorldExploration.Map
 
             if (dragging && dragPixels.sqrMagnitude > 0f)
             {
-                // 화면 픽셀 → 월드 이동(드래그 방향과 반대로 맵이 끌려옴)
+                // 카메라 회전(yaw)을 반영해 화면 기준으로 팬
+                Quaternion rot = Quaternion.Euler(0f, yawAngle, 0f);
+                Vector3 right = rot * Vector3.right;     // 화면 오른쪽(지면 투영)
+                Vector3 fwd = rot * Vector3.forward;     // 화면 위쪽(지면 투영)
                 float worldPerPixel = viewHeight / Mathf.Max(1, Screen.height);
                 _targetFocus = ClampToMap(_targetFocus +
-                    new Vector3(-dragPixels.x * worldPerPixel, 0f, -dragPixels.y * worldPerPixel));
+                    (-dragPixels.x * right - dragPixels.y * fwd) * worldPerPixel);
             }
         }
 
@@ -136,8 +141,8 @@ namespace WorldExploration.Map
             cam.orthographic = false;
             cam.fieldOfView = fieldOfView;
 
-            Quaternion rot = Quaternion.Euler(Mathf.Clamp(tiltAngle, 20f, 90f), 0f, 0f);
-            Vector3 dir = rot * Vector3.forward;                  // 아래·북쪽
+            Quaternion rot = Quaternion.Euler(Mathf.Clamp(tiltAngle, 20f, 90f), yawAngle, 0f);
+            Vector3 dir = rot * Vector3.forward;                  // 아래로 + yaw 방향
             float dist = (viewHeight * 0.5f) / Mathf.Tan(fieldOfView * 0.5f * Mathf.Deg2Rad);
 
             cam.transform.rotation = rot;
